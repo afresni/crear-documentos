@@ -1,0 +1,162 @@
+<!DOCTYPE html> 
+<html lang="ca">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title><?= PROJECT_NAME_UI ?> — <?= PROJECT_VERSION ?></title>
+
+  <!-- ESTILS CORRECTES -->
+  <?!= include_('ui/styles'); ?>
+</head>
+
+<body>
+  <main class="container">
+    <header>
+      <h1><?= PROJECT_NAME_UI ?> <small class="muted"><?= PROJECT_VERSION ?></small></h1>
+      <p class="muted">Zona horària: Europe/Madrid</p>
+    </header>
+
+    <!-- Info -->
+    <div class="info-box">
+      <strong>ℹ️ Informació:</strong>
+      Aquesta WebApp genera automàticament els documents oficials de reunió del centre
+      (Actes, Ordres del dia i Instruccions). El sistema desa cada document a la carpeta
+      del curs escolar corresponent i permet afegir assistents fàcilment des de la base
+      de dades.
+    </div>
+
+    <!-- Tabs -->
+    <nav class="tabs">
+      <button class="tab active" data-tab="crear">Crear document</button>
+      <button class="tab" data-tab="cercar">Cercar / Últims 10</button>
+    </nav>
+
+    <!-- TAB CREAR -->
+    <section id="tab-crear" class="tabpanel active">
+      <form id="mainForm" autocomplete="off">
+        <input type="hidden" id="nonce" name="nonce"/>
+        <input type="hidden" id="ausents" name="ausents"/>
+
+        <div class="grid">
+          <label>Àmbit*
+            <select required name="ambit" id="ambit"></select>
+          </label>
+
+          <label>Tipus*
+            <select required name="tipus" id="tipus"></select>
+          </label>
+
+          <label>Data reunió (YYYY-MM-DD)*
+            <input required type="date" name="dataReunio" id="dataReunio"/>
+          </label>
+
+          <label>Hora reunió (hh:mm)*
+            <input required type="time" name="horaReunio" id="horaReunio"/>
+          </label>
+
+          <label>Lloc de reunió*
+            <input required name="llocReunio" id="llocReunio" maxlength="200"
+                   placeholder="Departament d'orientació"/>
+          </label>
+
+          <label>Assistents*
+            <div class="assist-row">
+              <textarea required name="assistents" id="assistents" rows="2" maxlength="2000"
+                        placeholder="Nom1; Nom2; Nom3..."></textarea>
+
+              <div class="assist-buttons">
+                <button type="button" id="btnOpenPeople" class="btn-secondary">
+                  Afegir assistents
+                </button>
+                <!-- Botó d'ausents ELIMINAT -->
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="btnCreate" type="submit">Crear document</button>
+          <button id="btnReload" type="button">Recarregar</button>
+        </div>
+      </form>
+
+      <div id="toast"></div>
+
+      <section id="result" class="hidden">
+        <h2>Resultat</h2>
+        <p>
+          Document: <a id="docUrl" href="#" target="_blank" rel="noopener">Obrir</a> ·
+          Carpeta: <a id="folderUrl" href="#" target="_blank" rel="noopener">Obrir</a>
+        </p>
+      </section>
+    </section>
+
+    <!-- TAB CERCAR -->
+    <section id="tab-cercar" class="tabpanel">
+      <h2>Cercar documents</h2>
+
+      <div class="grid">
+        <label>Àmbit
+          <select id="f_ambit"><option value="">-- Qualsevol --</option></select>
+        </label>
+
+        <label>Tipus
+          <select id="f_tipus"><option value="">-- Qualsevol --</option></select>
+        </label>
+
+        <label>Text (en nom)
+          <input id="f_text" placeholder="Ex: A06CLAUSTRE2526"/>
+        </label>
+
+        <label>Data des de
+          <input type="date" id="f_date_min"/>
+        </label>
+
+        <label>Data fins a
+          <input type="date" id="f_date_max"/>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="btnSearch" type="button">Buscar</button>
+        <button id="btnRecent" type="button">Últims 10</button>
+      </div>
+
+      <h3>Resultats</h3>
+      <table id="tblSearch"><thead></thead><tbody></tbody></table>
+    </section>
+  </main>
+
+  <!-- MODAL PERSONES -->
+  <div id="peopleModal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h3 id="pmTitle">Seleccionar assistents</h3>
+        <button id="btnClosePeople" class="btn-secondary">Tancar</button>
+      </div>
+
+      <div class="modal-body">
+
+        <div class="modal-controls">
+          <input id="pFilter" placeholder="Cercar per nom" />
+          <label class="chk">
+            <input type="checkbox" id="pCheckAll"/> Marcar tots visibles
+          </label>
+        </div>
+
+        <div id="grpChips" class="group-chips"></div>
+
+        <div id="pList" class="people-list"></div>
+      </div>
+
+      <div class="modal-foot">
+        <button id="btnAddSelected" class="btn-primary">Afegir a Assistents</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT -->
+  <?!= include_('ui/app'); ?>
+
+</body>
+</html>

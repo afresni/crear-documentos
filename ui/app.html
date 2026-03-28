@@ -1,0 +1,500 @@
+<script>
+(function () {
+  /** =========================
+   * Helpers básicos
+   * ========================= */
+  const $ = (s, ctx = document) => ctx.querySelector(s);
+  const $$ = (s, ctx = document) => Array.from(ctx.querySelectorAll(s));
+
+  function uuid() {
+    return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+      (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    );
+  }
+
+  function toast(msg, ok = true) {
+    const t = $('#toast');
+    if (!t) return;
+    t.textContent = msg || '';
+    t.style.color = ok ? '#065f46' : '#7f1d1d';
+  }
+
+  function setNonce() {
+    const n = $('#nonce');
+    if (n) n.value = uuid();
+  }
+
+  function setLoading(b) {
+    ['#btnCreate', '#btnReload', '#btnSearch', '#btnRecent'].forEach(sel => {
+      const el = $(sel);
+      if (el) el.disabled = b;
+    });
+  }
+
+  /** =========================
+   * ✅ NUEVA FUNCIÓN: Mostrar/ocultar asistentes según tipo
+   * ========================= */
+  function toggleAssistentsField() {
+    const tipus = $('#tipus')?.value || '';
+    const container = $('#assistentsContainer');
+    const textarea = $('#assistents');
+    
+    if (!container || !textarea) return;
+    
+    // Solo mostrar asistentes si el tipo es ACTES
+    if (tipus === 'ACTES') {
+      container.style.display = '';
+      textarea.setAttribute('required', 'required');
+    } else {
+      container.style.display = 'none';
+      textarea.removeAttribute('required');
+      textarea.value = ''; // Limpiar el campo
+    }
+  }
+
+  /** =========================
+   *  BOOT / CATÀLEG
+   * ========================= */
+  function fillSelects(catalog) {
+    const ambs = catalog.ambits || [];
+    const tips = catalog.tipus || [];
+
+    // CREAR: Àmbit
+    const amb = $('#ambit');
+    if (amb) {
+      amb.innerHTML = '';
+      ambs.forEach(x => {
+        const opt = document.createElement('option');
+        opt.value = x.key;
+        opt.textContent = x.key;
+        amb.appendChild(opt);
+      });
+    }
+
+    // CREAR: Tipus
+    const tip = $('#tipus');
+    if (tip) {
+      tip.innerHTML = '';
+      tips.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        tip.appendChild(opt);
+      });
+      
+      // ✅ AÑADIR event listener para detectar cambios de tipo
+      tip.addEventListener('change', toggleAssistentsField);
+      
+      // ✅ LLAMAR inicial para establecer estado correcto
+      toggleAssistentsField();
+    }
+
+    // FILTRE: Àmbit
+    const fA = $('#f_ambit');
+    if (fA) {
+      fA.innerHTML = '<option value="">-- Qualsevol --</option>';
+      ambs.forEach(x => {
+        const opt = document.createElement('option');
+        opt.value = x.key;
+        opt.textContent = x.key;
+        fA.appendChild(opt);
+      });
+    }
+
+    // FILTRE: Tipus
+    const fT = $('#f_tipus');
+    if (fT) {
+      fT.innerHTML = '<option value="">-- Qualsevol --</option>';
+      tips.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        fT.appendChild(opt);
+      });
+    }
+  }
+
+  function boot() {
+    setNonce();
+    google.script.run
+      .withSuccessHandler(res => {
+        if (!res || !res.ok) {
+          toast(res && res.message ? res.message : 'Error boot', false);
+          return;
+        }
+        fillSelects(res.catalog || {});
+        toast('Llest ✅', true);
+      })
+      .withFailureHandler(err => {
+        toast(err && err.message ? err.message : 'Error GAS', false);
+      })
+      .api_boot();
+  }
+
+  /** =========================
+   *   LLISTAR / CERCAR DOCUMENTS
+   * ========================= */
+  function renderTable(elTable, data) {
+    const thead = elTable.querySelector('thead');
+    const tbody = elTable.querySelector('tbody');
+    thead.innerHTML = '';
+    tbody.innerHTML = '';
+
+    if (!data || !data.length) {
+      thead.innerHTML = '<tr><th>Sense resultats</th></tr>';
+      return;
+    }
+
+    const cols = ['timestampISO', 'ambit', 'tipus', 'curs', 'numero', 'name', 'status', 'user'];
+    thead.innerHTML =
+      '<tr>' + cols.map(c => `<th>${c}</th>`).join('') + '<th>Accions</th></tr>';
+
+    data.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.className = 'clickable-row';
+      tr.dataset.url = r.url || '';
+      tr.dataset.folder = r.folderUrl || '';
+
+      tr.innerHTML = `
+        <td>${r.timestampISO || ''}</td>
+        <td>${r.ambit || ''}</td>
+        <td>${r.tipus || ''}</td>
+        <td>${r.curs || ''}</td>
+        <td>${r.numero || ''}</td>
+        <td>${r.name || ''}</td>
+        <td>${r.status || ''}</td>
+        <td>${r.user || ''}</td>
+        <td class="actions-cell">
+          ${r.url ? `<button type="button" data-action="open" title="Obrir document">Obrir</button>` : ''}
+          ${r.folderUrl ? `<button type="button" data-action="folder" title="Obrir carpeta">Carpeta</button>` : ''}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.onclick = ev => {
+      const btn = ev.target.closest('button[data-action]');
+      const tr = ev.target.closest('tr');
+      if (!tr) return;
+
+      const url = tr.dataset.url;
+      const folder = tr.dataset.folder;
+
+      if (btn) {
+        const act = btn.getAttribute('data-action');
+        if (act === 'open' && url) window.open(url, '_blank', 'noopener');
+        if (act === 'folder' && folder) window.open(folder, '_blank', 'noopener');
+        return;
+      }
+
+      // Clic en fila: normal → Doc, Maj+clic → Carpeta
+      if (ev.shiftKey && folder) {
+        window.open(folder, '_blank', 'noopener');
+      } else if (url) {
+        window.open(url, '_blank', 'noopener');
+      }
+    };
+  }
+
+  function loadRecent() {
+    const tbl = $('#tblSearch');
+    if (!tbl) return;
+    google.script.run
+      .withSuccessHandler(res => {
+        if (!res || !res.ok) {
+          renderTable(tbl, []);
+          return;
+        }
+        renderTable(tbl, res.data || []);
+      })
+      .api_listRecent(10);
+  }
+
+  function search() {
+    const tbl = $('#tblSearch');
+    if (!tbl) return;
+
+    const params = {
+      ambit: $('#f_ambit')?.value || '',
+      tipus: $('#f_tipus')?.value || '',
+      text: $('#f_text')?.value || '',
+      dateMin: $('#f_date_min') ? $('#f_date_min').value : '',
+      dateMax: $('#f_date_max') ? $('#f_date_max').value : '',
+      limit: 200
+    };
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if (!res || !res.ok) {
+          renderTable(tbl, []);
+          return;
+        }
+        renderTable(tbl, res.data || []);
+      })
+      .api_search(params);
+  }
+
+  /** =========================
+   *  SELECTOR DE PERSONES
+   * ========================= */
+  let PEOPLE_ALL = [];
+  let PEOPLE_BY_GROUP = {};
+  let GROUPS = [];
+  let peopleLoaded = false;
+  let currentPeopleTarget = 'assistents';
+
+  function formatPersonName(p) {
+    return (
+      p.display ||
+      p.name ||
+      p.nom ||
+      p.Nom ||
+      (p.cognoms ? `${p.nom} ${p.cognoms}` : '') ||
+      ''
+    );
+  }
+
+  function renderGroupChips() {
+    const box = $('#grpChips');
+    if (!box) return;
+    box.innerHTML = '';
+
+    if (!GROUPS.length) return;
+
+    const allBtn = document.createElement('button');
+    allBtn.type = 'button';
+    allBtn.className = 'chip active';
+    allBtn.textContent = 'Tothom';
+    allBtn.addEventListener('click', () => {
+      $$('#grpChips .chip').forEach(c => c.classList.remove('active'));
+      allBtn.classList.add('active');
+      renderPeopleList(PEOPLE_ALL);
+    });
+    box.appendChild(allBtn);
+
+    GROUPS.forEach(g => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chip';
+      btn.dataset.group = g;
+      btn.textContent = g;
+      btn.addEventListener('click', () => {
+        $$('#grpChips .chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        const list = PEOPLE_BY_GROUP[g] || [];
+        renderPeopleList(list.length ? list : PEOPLE_ALL);
+      });
+      box.appendChild(btn);
+    });
+  }
+
+  function renderPeopleList(list) {
+    const container = $('#pList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const frag = document.createDocumentFragment();
+    list.forEach(p => {
+      const name = formatPersonName(p);
+      if (!name) return;
+      const label = document.createElement('label');
+      label.className = 'person-row';
+      label.innerHTML = `
+        <input type="checkbox" class="p-check" data-name="${name.replace(/"/g, '&quot;')}">
+        <span>${name}</span>
+      `;
+      frag.appendChild(label);
+    });
+    container.appendChild(frag);
+  }
+
+  function applyPeopleFilter() {
+    const term = ($('#pFilter')?.value || '').toLowerCase().trim();
+    let baseList = PEOPLE_ALL;
+
+    const activeChip = $('#grpChips .chip.active[data-group]');
+    if (activeChip) {
+      const g = activeChip.dataset.group;
+      baseList = PEOPLE_BY_GROUP[g] || PEOPLE_ALL;
+    }
+
+    if (!term) {
+      renderPeopleList(baseList);
+      return;
+    }
+
+    const filtered = baseList.filter(p =>
+      formatPersonName(p).toLowerCase().includes(term)
+    );
+    renderPeopleList(filtered);
+  }
+
+  function toggleCheckAll() {
+    const checked = $('#pCheckAll')?.checked;
+    $$('#pList .p-check').forEach(ch => {
+      ch.checked = !!checked;
+    });
+  }
+
+  function addSelectedToTarget() {
+    const targetId = currentPeopleTarget === 'ausents' ? 'ausents' : 'assistents';
+    const textarea = $('#' + targetId);
+    if (!textarea) return;
+
+    const current = textarea.value
+      ? textarea.value.split(';').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    const selected = $$('#pList .p-check:checked').map(ch => ch.dataset.name);
+    const set = new Set(current);
+    selected.forEach(n => set.add(n));
+
+    textarea.value = Array.from(set).join('; ');
+    closePeopleModal();
+  }
+
+  function loadPeople() {
+    google.script.run
+      .withSuccessHandler(res => {
+        if (!res || !res.ok) {
+          toast(res && res.message ? res.message : 'No s\'han pogut carregar les persones', false);
+          return;
+        }
+        PEOPLE_ALL = res.all || [];
+        PEOPLE_BY_GROUP = res.byGroup || {};
+        GROUPS = res.groups || [];
+
+        peopleLoaded = true;
+        renderGroupChips();
+        renderPeopleList(PEOPLE_ALL);
+      })
+      .withFailureHandler(err => {
+        toast(err && err.message ? err.message : 'Error carregant persones', false);
+      })
+      .api_people();
+  }
+
+  function openPeopleModal(target) {
+    currentPeopleTarget = target === 'ausents' ? 'ausents' : 'assistents';
+    const modal = $('#peopleModal');
+    if (!modal) return;
+
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+
+    if (!peopleLoaded) {
+      loadPeople();
+    } else {
+      renderGroupChips();
+      renderPeopleList(PEOPLE_ALL);
+    }
+
+    const filter = $('#pFilter');
+    if (filter) filter.value = '';
+    const chk = $('#pCheckAll');
+    if (chk) chk.checked = false;
+  }
+
+  function closePeopleModal() {
+    const modal = $('#peopleModal');
+    if (!modal) return;
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  /** =========================
+   *  INICIALITZACIÓ / ESDEVENIMENTS
+   * ========================= */
+  document.addEventListener('DOMContentLoaded', () => {
+    // Tabs
+    $$('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $$('.tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const target = btn.getAttribute('data-tab');
+        $$('.tabpanel').forEach(p => p.classList.remove('active'));
+        $('#tab-' + target).classList.add('active');
+        if (target === 'cercar') loadRecent();
+      });
+    });
+
+    // Crear document
+    const form = $('#mainForm');
+    if (form) {
+      form.addEventListener('submit', e => {
+        e.preventDefault();
+        
+        const tipus = $('#tipus')?.value || '';
+        
+        // ✅ VALIDACIÓN CONDICIONAL: Asistentes solo obligatorio para ACTES
+        if (tipus === 'ACTES') {
+          const assistents = $('#assistents')?.value || '';
+          if (!assistents.trim()) {
+            toast('Els assistents són obligatoris per a les Actes', false);
+            return;
+          }
+        }
+        
+        setLoading(true);
+
+        const payload = {
+          ambit: $('#ambit')?.value || '',
+          tipus: tipus,
+          dataReunio: $('#dataReunio')?.value || '',
+          horaReunio: $('#horaReunio')?.value || '',
+          llocReunio: $('#llocReunio')?.value || '',
+          assistents: $('#assistents')?.value || '', // Puede estar vacío para ORDRE/INSTRUCCIONS
+          nonce: $('#nonce')?.value || ''
+        };
+
+        google.script.run
+          .withSuccessHandler(res => {
+            setLoading(false);
+            if (!res || !res.ok) {
+              toast(res && res.message ? res.message : 'No s\'ha pogut crear', false);
+              return;
+            }
+            toast(res.existed ? 'Ja existia: obrint l\'original ✅' : 'Document creat ✅', true);
+            const docLink = $('#docUrl');
+            const folderLink = $('#folderUrl');
+            if (docLink) docLink.href = res.url;
+            if (folderLink && res.folderUrl) folderLink.href = res.folderUrl;
+            $('#result')?.classList.remove('hidden');
+            setNonce();
+          })
+          .withFailureHandler(err => {
+            setLoading(false);
+            toast(err && err.message ? err.message : 'Error', false);
+          })
+          .api_createDoc(payload);
+      });
+    }
+
+    // Buscar / últims
+    $('#btnRecent')?.addEventListener('click', loadRecent);
+    $('#btnSearch')?.addEventListener('click', search);
+    $('#btnReload')?.addEventListener('click', () => location.reload());
+
+    // Selector persones
+    $('#btnOpenPeople')?.addEventListener('click', () =>
+      openPeopleModal('assistents')
+    );
+
+    $('#btnClosePeople')?.addEventListener('click', closePeopleModal);
+
+    const modal = $('#peopleModal');
+    if (modal) {
+      modal.addEventListener('click', ev => {
+        if (ev.target === modal) closePeopleModal();
+      });
+    }
+
+    $('#pFilter')?.addEventListener('input', applyPeopleFilter);
+    $('#pCheckAll')?.addEventListener('change', toggleCheckAll);
+    $('#btnAddSelected')?.addEventListener('click', addSelectedToTarget);
+
+    // Arrencada inicial
+    boot();
+  });
+})();
+</script>
