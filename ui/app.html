@@ -36,9 +36,8 @@
    * ========================= */
   function toggleAssistentsField() {
     const tipus = $('#tipus')?.value || '';
-    const container = $('#assistentsContainer');
     const textarea = $('#assistents');
-    
+    const container = $('#assistentsContainer') || textarea?.closest('label');
     if (!container || !textarea) return;
     
     // Solo mostrar asistentes si el tipo es ACTES
@@ -444,6 +443,7 @@
           horaReunio: $('#horaReunio')?.value || '',
           llocReunio: $('#llocReunio')?.value || '',
           assistents: $('#assistents')?.value || '', // Puede estar vacío para ORDRE/INSTRUCCIONS
+          ausents: $('#ausents')?.value || '',
           nonce: $('#nonce')?.value || ''
         };
 
@@ -497,4 +497,5 @@
     boot();
   });
 })();
+
 </script>

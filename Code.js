@@ -68,8 +68,11 @@ function api_boot(){
 /* ======== CREATE DOC ======== */
 function api_createDoc(payload){
   const lock = LockService.getScriptLock();
-  lock.tryLock(30000);
+ const locked = lock.tryLock(30000);
   try {
+    if (!locked) {
+      throw new Error('LOCK_TIMEOUT');
+    }
     ValidationService.validateNonce(payload?.nonce);
     const clean = ValidationService.validateCreatePayload(payload);
 
@@ -182,4 +185,3 @@ function api_people(){
     return { ok:false, code:'PEOPLE_ERR', message:e.message };
   }
 }
-

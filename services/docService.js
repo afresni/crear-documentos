@@ -104,12 +104,23 @@
   function createFromTemplate(ambit, tipus, dataReunio, horaReunio, llocReunio, assistents, ausents){
     const tplId = ConfigRepo.getPlantillaIdByTipus(tipus);
     const ambitFolderId = ConfigRepo.getAmbitFolderIdByKey(ambit);
+    if (!tplId) {
+      throw new Error(`No hi ha plantilla configurada per al tipus '${tipus}'.`);
+    }
+    if (!ambitFolderId) {
+      throw new Error(`No hi ha carpeta configurada per a l'àmbit '${ambit}'.`);
+    }
     const d = new Date(dataReunio);
     if (isNaN(d.getTime())) {
       throw new Error(`La data de reunió '${dataReunio}' no és vàlida.`);
     }
     const { cursFormat, cursShort } = formatAcademicYear_(d);
-    const ambitFolder = DriveApp.getFolderById(ambitFolderId);
+    if (!tplId) {
+      throw new Error(`No hi ha plantilla configurada per al tipus '${tipus}'.`);
+    }
+    if (!ambitFolderId) {
+      throw new Error(`No hi ha carpeta configurada per a l'àmbit '${ambit}'.`);
+    }
     const key = `${tipus}_${ambit}_${cursShort}`;
     const prefix = ConfigRepo.getPrefixByTipus(tipus);
     const ambitSan = sanitizeName_(ambit);
@@ -133,7 +144,12 @@
     }
     
     // Copiar plantilla
-    const tplFile = DriveApp.getFileById(tplId);
+    let tplFile;
+    try {
+      tplFile = DriveApp.getFileById(tplId);
+    } catch (e) {
+      throw new Error(`No s'ha pogut obrir la plantilla del tipus '${tipus}' (ID: ${tplId}). Revisa ID i permisos de Drive.`);
+    }
     const newFile = tplFile.makeCopy(finalName);
     finalFolder.addFile(newFile);
     try { DriveRepo.removeFromRootIfPresent(newFile); } catch(_){}
@@ -166,4 +182,5 @@
   }
   
   global.DocService = { createFromTemplate };
+  
 })(this);
